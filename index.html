@@ -12,12 +12,12 @@
             <a href="https://pytorch3d.org/tutorials/deform_source_mesh_to_target_mesh">
                 Deform a source mesh to form a target mesh using 3D loss functions</a><br>
         </div>
-		<div style="position:absolute; top: 15%; left: 50%"><p id = "modelNum">iter # </p></div>
+		<div style="position:absolute; top: 15%; left: 50%"><p id="modelNum">iter #</p></div>
 		<script src="scoreoutputer.min.js"></script>
 		<script>
 			// 建構子 ScoreOutputer 接受一個字串，該字串為 csv 的檔案名稱
 			// 以下面範例，檔名就為 "109598105(總分: 6).csv"
-			var so = new ScoreOutputer("109598019");
+			var so = new ScoreOutputer("109598005");
 			so.installCSS(function(){
 				// 安裝 bootstrap 的 css，如果在 html 上方引用 bootstrap 5.1.1 的話就不用使用 installCSS ，注意一定要 bootstrap css 5.1.1 版
 				// installCSS 接收一個 callback 當作參數，作為成功安裝 bootstrap css 的回呼函式
@@ -65,6 +65,16 @@
 				);
 			});
 		</script>
+		<select id="model_select_id" >
+			<option value="1" >Cow</option>
+			<option value="0" >Dolphin</option>
+		</select>
+		<button type="button" onclick="ButtonFunction()" id="button_id" value="-1">LOAD MODEL</button>
+		<script>
+			function ButtonFunction() {
+				document.getElementById("button_id").value = document.getElementById("model_select_id").value
+			}
+		</script>
 		<script type="module">
 
 			import * as THREE from './build/three.module.js';
@@ -78,19 +88,21 @@
 
 			let camera, cameraTarget, scene, renderer;
 
+			let isFirstSelect = true ;
+
 			// The iterations of pytorch3d models
             const models = [0,5,10,20,30,40,50,60,80,100,130,160,190,220,250,300,400,500,600,800,1000,1250,1500,1750,2000];
-
+			var mesh, mesh2, gui, status = -1, order = -1;
+			var mesh_array = [];
 			init();
 			animate();
 
 			function init() {
-
 				container = document.createElement( 'div' );
 				document.body.appendChild( container );
 
 				// Camera
-				camera = new THREE.PerspectiveCamera( 35, window.innerWidth / window.innerHeight, 1, 15 );
+				camera = new THREE.PerspectiveCamera( 35, (window.innerWidth / window.innerHeight), 1, 15 );
 				camera.position.set( 3, 0.15, 3 );
 
 				cameraTarget = new THREE.Vector3( 0, 0.1, 0 );
@@ -100,7 +112,7 @@
 				scene.fog = new THREE.Fog( 0x72645b, 2, 15 );
 
 				// Ground
-
+				
 				const plane = new THREE.Mesh(
 					new THREE.PlaneGeometry( 40, 40 ),
 					new THREE.MeshPhongMaterial( { color: 0x999999, specular: 0x101010 } )
@@ -117,62 +129,67 @@
                 const loader = new PLYLoader();
 
 				// Load original model according to model_id
-				loader.load( './models/dolphin.ply', function ( geometry ) {
+				loader.load( './models/cow.ply', function ( geometry ) {
 
 					const material = new THREE.MeshPhongMaterial( { color: 0xFF5555, specular: 0x111111, shininess: 200 } );
 					geometry.computeVertexNormals();
 
-					const mesh = new THREE.Mesh( geometry, material );
+					mesh = new THREE.Mesh( geometry, material );
 
-					mesh.position.set( -0.5, -0.5, 0 );
-					mesh.scale.multiplyScalar( 1.5 );
-
+					mesh.position.set( -0.5, 0, 0 );
+					mesh.rotation.x=Math.PI/180*-90
+					mesh.scale.multiplyScalar( 0.5 );
 					mesh.castShadow = true;
 					mesh.receiveShadow = true;
-
 					scene.add( mesh );
-				} );
 
+				} );
+				
 				// The material for pytorch3d model
 				const material = new THREE.MeshPhongMaterial( { color: 0xAAAAAA, specular: 0x111111, shininess: 200 } );
 				
 				// Load models of pytorch3d 
-				models.forEach( element => loader.load('./models/dolphin/model_' + element.toString() + '.ply', 
+
+				models.forEach(element => loader.load( './models/cow/model_' + element.toString() + '.ply', 
 				function ( geometry ) {
 
 					geometry.computeVertexNormals();
 
-                    const mesh = new THREE.Mesh( geometry, material );
-					mesh.name = element;
-                    mesh.position.set( 0.5, -0.5, 0 );
-					mesh.scale.multiplyScalar( 1.5 );
+                    mesh2 = new THREE.Mesh( geometry, material );
+					mesh2.name = element; 
+                    mesh2.position.set( 0, 0, 1.5 );
+					mesh2.scale.multiplyScalar( 0.5 );
+                    mesh2.castShadow = true;
+                    mesh2.receiveShadow = true;
+					if( element != 0 )
+						mesh2.visible = false;
 
-                    mesh.castShadow = true;
-                    mesh.receiveShadow = true;
-					if(element!=0)
-						mesh.visible = false;
-                    scene.add( mesh );
+                    scene.add( mesh2 );
+					mesh_array.push( mesh2 ) ;
                 } ));
 
-				const gui = new GUI();
-				const effectController = {step: 1};
-				gui.add(effectController, 'step', 1, models.length, 1).onChange(iterChanger);
+				gui = new GUI ();
+				const effectController = { step: 1 };
+				gui.add( effectController, 'step', 1, models.length, 1 ).onChange( iterChanger );
+
 				let currentIter = effectController.step;
 				function iterChanger(){
-					if(currentIter === effectController.step) return;
+					if(currentIter===effectController.step) return;
 					currentIter = effectController.step;
 					var textTag = document.getElementById('modelNum');
 					textTag.innerText = "iter #" + models[currentIter-1].toString();
-					for(let i=0;i<models.length;i++){
+					for( let i = 0; i < models.length; i++ ){
 						let item = scene.getObjectByName(models[i]);
-						if(i!==currentIter-1 && item.visible === true){
+						if( i !== currentIter-1 && item.visible === true ){
 							item.visible = false;
 						}
-						else if(i===currentIter-1){
+						else if( i === currentIter-1)
+						{
 							item.visible = true;
 						}
 					}
 				}
+				
 				// Lights
 
 				scene.add( new THREE.HemisphereLight( 0x443333, 0x111122 ) );
@@ -189,9 +206,6 @@
 				renderer.shadowMap.enabled = true;
 
 				container.appendChild( renderer.domElement );
-
-				//
-
 				window.addEventListener( 'resize', onWindowResize );
 
 			}
@@ -233,6 +247,42 @@
 
 				render();
 
+				if( status != order ){
+					status = order;
+					isFirstSelect = true;
+				}
+				var e = document.getElementById("button_id");
+				order = e.value;
+				switch(order){
+					case "0":
+						if( isFirstSelect === true ){
+							status = 0;
+							isFirstSelect = false;
+							scene.remove( mesh );	
+							for( var i = 0 ; i <= 24 ; i++ )
+							{
+								scene.remove( mesh_array[i] ) ;
+							}
+	
+							mesh_array=[];
+							ChangeDolphin();
+						}
+
+					case "1":
+						if( isFirstSelect === true ){
+							isFirstSelect = false;
+							scene.remove( mesh );	
+							for( var i = 0 ; i <= 24 ; i++ )
+							{
+								scene.remove( mesh_array[i] ) ;
+							}
+		
+							mesh_array=[];
+							ChangeCow();
+					}					  
+						
+				}
+				
 			}
 
 			function render() {
@@ -246,6 +296,105 @@
 
 				renderer.render( scene, camera );
 
+			}
+
+			function ChangeDolphin() {
+
+				// PLY model files
+
+                const loader = new PLYLoader();
+
+				// Load original model according to model_id
+				loader.load( './models/dolphin.ply', function ( geometry ) {
+
+					const material = new THREE.MeshPhongMaterial( { color: 0xFF5555, specular: 0x111111, shininess: 200 } );
+					geometry.computeVertexNormals();
+
+					mesh = new THREE.Mesh( geometry, material );
+
+					mesh.position.set( -0.5, -0.5, 0 );
+					mesh.scale.multiplyScalar( 1.5 );
+					mesh.castShadow = true;
+					mesh.receiveShadow = true;
+
+					scene.add( mesh );
+				} );
+
+				// The material for pytorch3d model
+				const material = new THREE.MeshPhongMaterial( { color: 0xAAAAAA, specular: 0x111111, shininess: 200 } );
+				
+				// Load models of pytorch3d 
+				models.forEach(element => loader.load( './models/dolphin/model_' + element.toString() + '.ply', 
+				function ( geometry ) {
+
+					geometry.computeVertexNormals();
+
+                    mesh2 = new THREE.Mesh( geometry, material );
+					mesh2.name = element; 
+                    mesh2.position.set( -0.5, -0.5, 1.5 );
+					mesh2.scale.multiplyScalar( 1.5 );
+                    mesh2.castShadow = true;
+                    mesh2.receiveShadow = true;
+					if( element != 0 )
+						mesh2.visible = false;
+                    scene.add( mesh2 );
+					mesh_array.push( mesh2 ) ;
+                } ));
+				
+
+			}
+
+			function ChangeCow() {
+
+			// PLY model files
+
+			const loader = new PLYLoader();
+
+			// Load original model according to model_id
+			loader.load( './models/cow.ply', function ( geometry ) {
+
+				const material = new THREE.MeshPhongMaterial( { color: 0xFF5555, specular: 0x111111, shininess: 200 } );
+				geometry.computeVertexNormals();
+
+				mesh = new THREE.Mesh( geometry, material );
+
+				mesh.position.set( -0.5, 0, 0 );
+				mesh.rotation.x=Math.PI/180*-90
+				mesh.scale.multiplyScalar( 0.5 );
+				mesh.castShadow = true;
+				mesh.receiveShadow = true;
+
+				scene.add( mesh );
+			} );
+
+			// The material for pytorch3d model
+			const material = new THREE.MeshPhongMaterial( { color: 0xAAAAAA, specular: 0x111111, shininess: 200 } );
+
+			// Load models of pytorch3d 
+			models.forEach(element => loader.load( './models/cow/model_' + element.toString() + '.ply', 
+				function ( geometry ) {
+
+					geometry.computeVertexNormals();
+
+					mesh2 = new THREE.Mesh( geometry, material );
+					mesh2.name = element; 
+					mesh2.position.set( 0, 0, 1.5 );
+					mesh2.scale.multiplyScalar( 0.5 );
+					mesh2.castShadow = true;
+					mesh2.receiveShadow = true;
+					if( element != 0 )
+						mesh2.visible = false;
+					scene.add( mesh2 );
+					mesh_array.push( mesh2 ) ;
+				} )
+			);
+
+
+			}
+
+			function ButtonFunction() {
+				var e = document.getElementById("model_select_id");
+				order = e.value;
 			}
 
 		</script>
